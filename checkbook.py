@@ -314,6 +314,7 @@ def launch_tui(path, initial_bank=None):
                 idx = len(txns) - 1
             elif ch == ord(" "):
                 txns[idx]["cleared"] = not txns[idx].get("cleared")
+                jump_next_uncleared()
             elif ch == ord("r"):
                 # Enter bank balance for reconciliation, allow empty input to keep current
                 s = prompt(stdscr, f"Bank balance [{bank_balance if bank_balance is not None else ''}]: ").strip()
