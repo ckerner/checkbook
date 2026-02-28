@@ -6,8 +6,6 @@ import os
 from decimal import Decimal
 from datetime import date, timedelta
 
-TODAY = date.today().isoformat()
-
 
 # =========================
 # Ledger and helper
@@ -74,17 +72,24 @@ def compute_balances(account, bank_balance=None):
 # Utilities
 # =========================
 
+def d(v):
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("0.00")
 
 def today_if_dot(s: str) -> str:
+    if not s:
+       return date.today().isoformat()
+
     s = s.strip()
 
-    # "." → today
     if s == ".":
-        return TODAY
+       return date.today().isoformat()
 
     # "-N" → N days ago
     if s.startswith("-") and s[1:].isdigit():
-        return (date.today() - timedelta(days=int(s[1:]))).strftime("%Y-%m-%d")
+        return (date.today() - timedelta(days=int(s[1:]))).isoformat()
 
     # otherwise unchanged
     return s
@@ -357,6 +362,7 @@ def launch_tui(path, initial_bank=None):
                 idx = max(0, idx - 1)
             elif ch == ord("a"):
                 rv = add_transaction_tui(stdscr)
+                # If we added a transaction, jump to the bottom
                 if rv != None:
                    idx = len(txns) - 1
             elif ch == ord("n"):
