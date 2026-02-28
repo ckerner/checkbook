@@ -244,27 +244,40 @@ def launch_tui(path, initial_bank=None):
         return s
 
     def add_transaction_tui(stdscr):
-        date_in = prompt(stdscr, "Date (YYYY-MM-DD|.=today|-N): ")
-        date_val = today_if_dot(date_in)
-        desc = prompt(stdscr, "Description: ")
-        cat = prompt(stdscr, "Category (blank = uncategorized): ")
-        amt = Decimal(prompt(stdscr, "Amount (negative = debit): "))
-        cleared = prompt(stdscr, "Cleared? (y/N): ").lower().startswith("y")
-        t = {"date": date_val, "description": desc, "category": cat or None, "amount": str(amt),
-             "cleared": cleared, "deleted": False}
-        ledger.add_transaction(t)
+        try:
+           date_in = prompt(stdscr, "Date (YYYY-MM-DD|.=today|-N): ")
+           date_val = today_if_dot(date_in)
+           desc = prompt(stdscr, "Description: ")
+           cat = prompt(stdscr, "Category (blank = uncategorized): ")
+           amt = Decimal(prompt(stdscr, "Amount (negative = debit): "))
+           cleared = prompt(stdscr, "Cleared? (y/N): ").lower().startswith("y")
+           t = {"date": date_val, "description": desc, "category": cat or None, "amount": str(amt),
+                "cleared": cleared, "deleted": False}
+           ledger.add_transaction(t)
+        except KeyboardInterrupt:
+             # cancel edit
+             return None
+        finally:
+            curses.curs_set(0)
 
     def edit_transaction(stdscr, t):
-        for field in ("date", "description", "category", "amount"):
-            val = t.get(field, "")
-            s = prompt(stdscr, f"{field} [{val}]: ").strip()
-            if s:
-                if field == "date":
-                    t[field] = today_if_dot(s)
-                elif field == "category":
-                    t[field] = None if s == " " else s
-                else:
-                    t[field] = s
+        try:
+           for field in ("date", "description", "category", "amount"):
+               val = t.get(field, "")
+               s = prompt(stdscr, f"{field} [{val}]: ").strip()
+               if s:
+                   if field == "date":
+                       t[field] = today_if_dot(s)
+                   elif field == "category":
+                       t[field] = None if s == " " else s
+                   else:
+                       t[field] = s
+        except KeyboardInterrupt:
+             # cancel edit
+             return None
+
+        finally:
+            curses.curs_set(0)
 
     def jump_next_uncleared():
         nonlocal idx
@@ -334,13 +347,18 @@ def launch_tui(path, initial_bank=None):
                 if s:
                     bank_balance = Decimal(s)
             elif ch == ord("e"):
-                edit_transaction(stdscr, txns[idx])
+                 txn = txns[idx]
+                 updated = edit_transaction(stdscr, txn)
+                 if updated is not None:
+                     txns[idx] = updated
+                     dirty = True
             elif ch == ord("d"):
                 ledger.delete_transaction(idx)
                 idx = max(0, idx - 1)
             elif ch == ord("a"):
-                add_transaction_tui(stdscr)
-                idx = len(txns) - 1
+                rv = add_transaction_tui(stdscr)
+                if rv != None:
+                   idx = len(txns) - 1
             elif ch == ord("n"):
                 jump_next_uncleared()
             elif ch == ord("N"):
