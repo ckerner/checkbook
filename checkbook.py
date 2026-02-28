@@ -4,7 +4,7 @@ import curses
 import json
 import os
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 
 TODAY = date.today().isoformat()
 
@@ -74,8 +74,21 @@ def compute_balances(account, bank_balance=None):
 # Utilities
 # =========================
 
-def today_if_dot(s):
-    return TODAY if s.strip() == "." else s.strip()
+
+def today_if_dot(s: str) -> str:
+    s = s.strip()
+
+    # "." → today
+    if s == ".":
+        return TODAY
+
+    # "-N" → N days ago
+    if s.startswith("-") and s[1:].isdigit():
+        return (date.today() - timedelta(days=int(s[1:]))).strftime("%Y-%m-%d")
+
+    # otherwise unchanged
+    return s
+
 
 
 def load_account(path):
@@ -181,7 +194,7 @@ def launch_tui(path, initial_bank=None):
                 f"Difference          : {rec['difference']:10.2f}",
             ]
         else:
-            lines = ["Bank balance not entered (press b)"]
+            lines = ["Bank balance not entered (press r)"]
 
         for i, line in enumerate(lines):
             stdscr.addstr(i, 0, line)
@@ -327,6 +340,7 @@ def launch_tui(path, initial_bank=None):
                 idx = max(0, idx - 1)
             elif ch == ord("a"):
                 add_transaction_tui(stdscr)
+                idx = len(txns) - 1
             elif ch == ord("n"):
                 jump_next_uncleared()
             elif ch == ord("N"):
