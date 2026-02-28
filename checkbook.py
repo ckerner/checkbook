@@ -244,7 +244,7 @@ def launch_tui(path, initial_bank=None):
         return s
 
     def add_transaction_tui(stdscr):
-        date_in = prompt(stdscr, "Date (YYYY-MM-DD or . for today): ")
+        date_in = prompt(stdscr, "Date (YYYY-MM-DD|.=today|-N): ")
         date_val = today_if_dot(date_in)
         desc = prompt(stdscr, "Description: ")
         cat = prompt(stdscr, "Category (blank = uncategorized): ")
