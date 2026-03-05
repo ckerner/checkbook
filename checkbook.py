@@ -5,6 +5,7 @@ import json
 import os
 from decimal import Decimal
 from datetime import date, timedelta
+import sys
 
 
 # =========================
@@ -97,13 +98,17 @@ def today_if_dot(s: str) -> str:
 
 
 def load_account(path):
-    with open(path) as f:
-        acct = json.load(f)
-    if "initial_balance" not in acct:
-        acct["initial_balance"] = "0.00"
-    if "transactions" not in acct:
-        acct["transactions"] = []
-    return acct
+    try:
+       with open(path) as f:
+           acct = json.load(f)
+       if "initial_balance" not in acct:
+           acct["initial_balance"] = "0.00"
+       if "transactions" not in acct:
+           acct["transactions"] = []
+       return acct
+    except FileNotFoundError:
+       print(f"File Not Found: {path}")
+       sys.exit(1)
 
 
 def save_account(path, acct):
@@ -362,9 +367,7 @@ def launch_tui(path, initial_bank=None):
                 idx = max(0, idx - 1)
             elif ch == ord("a"):
                 rv = add_transaction_tui(stdscr)
-                # If we added a transaction, jump to the bottom
-                if rv != None:
-                   idx = len(txns) - 1
+                idx = len(txns) - 1
             elif ch == ord("n"):
                 jump_next_uncleared()
             elif ch == ord("N"):
