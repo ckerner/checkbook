@@ -6,6 +6,7 @@ import os
 from decimal import Decimal
 from datetime import date, timedelta
 import sys
+from collections import defaultdict
 
 
 # =========================
@@ -72,6 +73,13 @@ def compute_balances(account, bank_balance=None):
 # =========================
 # Utilities
 # =========================
+
+def in_date_range(txn_date, start, end):
+    if start and txn_date < start:
+        return False
+    if end and txn_date > end:
+        return False
+    return True
 
 def d(v):
     try:
@@ -140,6 +148,53 @@ def print_register(acct):
         mark = "✔" if t.get("cleared") else " "
         print(f"{mark} {t['date']} {t['description'][:30]:30} {cat[:15]:15} {debit:>10} {credit:>10} {bal:12.2f}")
 
+
+def category_detail_report(acct, start=None, end=None):
+    cats = defaultdict(list)
+
+    for t in acct["transactions"]:
+        if t.get("deleted"):
+            continue
+
+        d = t.get("date", "")
+        if not in_date_range(d, start, end):
+            continue
+
+        cat = t.get("category") or "Uncategorized"
+        cats[cat].append(t)
+
+    for cat in sorted(cats):
+
+        total = sum(Decimal(str(t["amount"])) for t in cats[cat])
+
+        LINE_WIDTH = 80
+
+        print()
+        amt = f"{total:,.2f}"
+        print(f"{cat}{amt:>{LINE_WIDTH-len(cat)}}")
+        print("-" * LINE_WIDTH)
+
+        for t in cats[cat]:
+
+            date = t.get("date", "")
+            desc = t.get("description", "")
+
+            amt = Decimal(str(t["amount"]))
+
+            debit = ""
+            credit = ""
+
+            if amt < 0:
+                debit = f"{abs(amt):,.2f}"
+            else:
+                credit = f"{amt:,.2f}"
+
+            print(
+                f"{date:12} "
+                f"{desc:30} "
+                f"{debit:>12} "
+                f"{credit:>12}"
+            )
 
 def category_report(acct, start=None, end=None):
     totals = {}
@@ -409,6 +464,11 @@ def main():
     c.add_argument("--start")
     c.add_argument("--end")
 
+    catd = sub.add_parser("category-detail", help="Category report with transactions")
+    catd.add_argument("file")
+    catd.add_argument("--start")
+    catd.add_argument("--end")
+
     t = sub.add_parser("tui")
     t.add_argument("file")
     t.add_argument("--bank-balance")
@@ -432,6 +492,13 @@ def main():
         print_register(load_account(args.file))
     elif args.cmd == "categories":
         category_report(load_account(args.file), args.start, args.end)
+    elif args.cmd == "category-detail":
+        acct = load_account(args.file)
+        category_detail_report(
+            acct,
+            start=args.start,
+            end=args.end
+        )
     elif args.cmd == "tui":
         launch_tui(args.file, args.bank_balance)
     elif args.cmd == "reconcile":
