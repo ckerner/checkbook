@@ -444,11 +444,11 @@ def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd")
 
-    i = sub.add_parser("init")
-    i.add_argument("file")
-    i.add_argument("balance")
+    i = sub.add_parser("init",help="Initialize a new account")
+    i.add_argument("file",help="Account Filename")
+    i.add_argument("balance",help="Beginning account balance")
 
-    a = sub.add_parser("add")
+    a = sub.add_parser("add",help="Add a transaction to an account")
     a.add_argument("file")
     a.add_argument("date")
     a.add_argument("description")
@@ -456,24 +456,24 @@ def main():
     a.add_argument("-c", "--category")
     a.add_argument("--cleared", action="store_true")
 
-    r = sub.add_parser("register")
+    r = sub.add_parser("register",help="Print the account register")
     r.add_argument("file")
 
-    c = sub.add_parser("categories")
+    c = sub.add_parser("categories", help="Category summary report")
     c.add_argument("file")
-    c.add_argument("--start")
-    c.add_argument("--end")
+    c.add_argument("--start",help="Report start date")
+    c.add_argument("--end",help="Report end date")
 
     catd = sub.add_parser("category-detail", help="Category report with transactions")
     catd.add_argument("file")
     catd.add_argument("--start")
     catd.add_argument("--end")
 
-    t = sub.add_parser("tui")
+    t = sub.add_parser("tui",help="Enter the graphical interface")
     t.add_argument("file")
     t.add_argument("--bank-balance")
 
-    rec = sub.add_parser("reconcile")
+    rec = sub.add_parser("reconcile",help="Reonciliation report")
     rec.add_argument("file")
     rec.add_argument("--bank-balance", required=True)
 
