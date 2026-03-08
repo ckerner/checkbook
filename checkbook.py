@@ -464,7 +464,7 @@ def main():
     c.add_argument("--start",help="Report start date")
     c.add_argument("--end",help="Report end date")
 
-    catd = sub.add_parser("category-detail", help="Category report with transactions")
+    catd = sub.add_parser("category-report", help="Category report with transactions")
     catd.add_argument("file")
     catd.add_argument("--start")
     catd.add_argument("--end")
@@ -492,7 +492,7 @@ def main():
         print_register(load_account(args.file))
     elif args.cmd == "categories":
         category_report(load_account(args.file), args.start, args.end)
-    elif args.cmd == "category-detail":
+    elif args.cmd == "category-report":
         acct = load_account(args.file)
         category_detail_report(
             acct,
