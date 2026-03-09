@@ -155,6 +155,7 @@ def print_register(acct):
 def daily_report(acct):
 
     ledger = Ledger(acct)
+    running = ledger.running_balance()
 
     bank_balance = acct.get("bank_balance")
 
@@ -187,15 +188,19 @@ def daily_report(acct):
 
     print("\nLAST TWO DAYS ACTIVITY")
     print("-" * 70)
+    print(f"{'Date':10} {'Description':25} {'Amount':>10} {'Balance':>12}")
 
     cutoff = (date.today() - timedelta(days=2)).isoformat()
 
-    for t in sorted(
-        [x for x in ledger.transactions if x["date"] >= cutoff],
-        key=lambda x: x["date"]
-    ):
-        amt = Decimal(str(t["amount"]))
-        print(f"{t['date']} {t['description'][:30]:30} {amt:10.2f}")
+    for t, bal in zip(ledger.transactions, running):
+        if t["date"] >= cutoff:
+            amt = Decimal(str(t["amount"]))
+            print(
+                f"{t['date']:10} "
+                f"{t['description'][:25]:25} "
+                f"{amt:10.2f} "
+                f"{bal:12.2f}"
+            )
 
 def category_detail_report(acct, start=None, end=None):
     cats = defaultdict(list)
