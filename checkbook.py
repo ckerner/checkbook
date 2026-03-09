@@ -18,6 +18,7 @@ class Ledger:
         self.account = account
         self.transactions = [t for t in account.get("transactions", []) if not t.get("deleted")]
         self.initial_balance = Decimal(str(account.get("initial_balance", "0.00")))
+        self.bank_balance = account.get("bank_balance")
 
     def running_balance(self):
         bal = self.initial_balance
@@ -111,6 +112,8 @@ def load_account(path):
            acct = json.load(f)
        if "initial_balance" not in acct:
            acct["initial_balance"] = "0.00"
+       if "bank_balance" not in acct:
+           acct["bank_balance"] = None
        if "transactions" not in acct:
            acct["transactions"] = []
        return acct
@@ -148,6 +151,51 @@ def print_register(acct):
         mark = "✔" if t.get("cleared") else " "
         print(f"{mark} {t['date']} {t['description'][:30]:30} {cat[:15]:15} {debit:>10} {credit:>10} {bal:12.2f}")
 
+
+def daily_report(acct):
+
+    ledger = Ledger(acct)
+
+    bank_balance = acct.get("bank_balance")
+
+    print("\nDAILY ACCOUNT REPORT")
+    print("=" * 70)
+
+    if bank_balance:
+        rec = ledger.reconcile(bank_balance)
+
+        print("\nRECONCILIATION")
+        print("-" * 40)
+        print(f"Bank balance       : {rec['bank_balance']:12.2f}")
+        print(f"Uncleared checks   : {rec['uncleared_checks']:12.2f}")
+        print(f"Uncleared deposits : {rec['uncleared_deposits']:12.2f}")
+        print(f"Ending balance     : {rec['ending_balance']:12.2f}")
+        print(f"Register balance   : {rec['register_balance']:12.2f}")
+        print(f"Difference         : {rec['difference']:12.2f}")
+
+    else:
+        print("\nBank balance not set")
+
+    print("\nUNCLEARED TRANSACTIONS")
+    print("-" * 70)
+
+    for t in sorted(
+        [x for x in ledger.transactions if not x.get("cleared")],
+        key=lambda x: x["date"]
+    ):
+        print(f"{t['date']} {t['description'][:30]:30} {Decimal(str(t['amount'])):10.2f}")
+
+    print("\nLAST TWO DAYS ACTIVITY")
+    print("-" * 70)
+
+    cutoff = (date.today() - timedelta(days=2)).isoformat()
+
+    for t in sorted(
+        [x for x in ledger.transactions if x["date"] >= cutoff],
+        key=lambda x: x["date"]
+    ):
+        amt = Decimal(str(t["amount"]))
+        print(f"{t['date']} {t['description'][:30]:30} {amt:10.2f}")
 
 def category_detail_report(acct, start=None, end=None):
     cats = defaultdict(list)
@@ -234,8 +282,17 @@ def reconcile_report(acct, bank_balance):
 
 def launch_tui(path, initial_bank=None):
     acct = load_account(path)
+
+    if initial_bank is not None:
+       acct["bank_balance"] = str(Decimal(str(initial_bank)))
+
     ledger = Ledger(acct)
-    bank_balance = Decimal(str(initial_bank)) if initial_bank is not None else None
+
+    bank_balance = (
+        Decimal(str(acct["bank_balance"]))
+        if acct.get("bank_balance") is not None
+        else None
+    )
 
     txns = ledger.transactions
     idx = 0
@@ -411,6 +468,8 @@ def launch_tui(path, initial_bank=None):
                 s = prompt(stdscr, f"Bank balance [{bank_balance if bank_balance is not None else ''}]: ").strip()
                 if s:
                     bank_balance = Decimal(s)
+                    acct["bank_balance"] = str(bank_balance)
+                    save_account( path, acct )
             elif ch == ord("e"):
                  txn = txns[idx]
                  updated = edit_transaction(stdscr, txn)
@@ -473,6 +532,9 @@ def main():
     t.add_argument("file")
     t.add_argument("--bank-balance")
 
+    d = sub.add_parser("daily-report", help="Daily reconciliation report")
+    d.add_argument("file")
+
     rec = sub.add_parser("reconcile",help="Reonciliation report")
     rec.add_argument("file")
     rec.add_argument("--bank-balance", required=True)
@@ -490,6 +552,9 @@ def main():
         save_account(args.file, acct)
     elif args.cmd == "register":
         print_register(load_account(args.file))
+    elif args.cmd == "daily-report":
+        acct = load_account(args.file)
+        daily_report(acct)
     elif args.cmd == "categories":
         category_report(load_account(args.file), args.start, args.end)
     elif args.cmd == "category-report":
@@ -502,8 +567,19 @@ def main():
     elif args.cmd == "tui":
         launch_tui(args.file, args.bank_balance)
     elif args.cmd == "reconcile":
-        reconcile_report(load_account(args.file), args.bank_balance)
+        acct = load_account(args.file)
 
+        if args.bank_balance:
+            acct["bank_balance"] = str(Decimal(args.bank_balance))
+            save_account(args.file, acct)
+
+        bank_balance = args.bank_balance or acct.get("bank_balance")
+
+        if bank_balance is None:
+            print("Bank balance not set. Provide --bank-balance.")
+            sys.exit(1)
+
+        reconcile_report(acct, bank_balance)
 
 if __name__ == "__main__":
     main()
