@@ -288,6 +288,11 @@ def launch_tui(path, initial_bank=None):
 
     ledger = Ledger(acct)
 
+    def refresh_ledger():
+        nonlocal ledger, txns
+        ledger = Ledger(acct)
+        txns = ledger.transactions
+
     bank_balance = (
         Decimal(str(acct["bank_balance"]))
         if acct.get("bank_balance") is not None
@@ -304,6 +309,9 @@ def launch_tui(path, initial_bank=None):
         stdscr.clear()
         h, w = stdscr.getmaxyx()
 
+        acct_name = os.path.basename(path)
+        stdscr.addstr(0, 0, f"Account: {acct_name}")
+
         # Reconciliation panel
         if bank_balance is not None:
             rec = ledger.reconcile(bank_balance)
@@ -319,9 +327,9 @@ def launch_tui(path, initial_bank=None):
             lines = ["Bank balance not entered (press r)"]
 
         for i, line in enumerate(lines):
-            stdscr.addstr(i, 0, line)
+            stdscr.addstr(i + 1, 0, line)
 
-        top = len(lines) + 1
+        top = len(lines) + 2
         visible = h - top - 1
 
         running_balances = ledger.running_balance()
@@ -462,6 +470,7 @@ def launch_tui(path, initial_bank=None):
                 idx = len(txns) - 1
             elif ch == ord(" "):
                 txns[idx]["cleared"] = not txns[idx].get("cleared")
+                refresh_ledger()
                 jump_next_uncleared()
             elif ch == ord("r"):
                 # Enter bank balance for reconciliation, allow empty input to keep current
@@ -472,15 +481,15 @@ def launch_tui(path, initial_bank=None):
                     save_account( path, acct )
             elif ch == ord("e"):
                  txn = txns[idx]
-                 updated = edit_transaction(stdscr, txn)
-                 if updated is not None:
-                     txns[idx] = updated
-                     dirty = True
+                 edit_transaction(stdscr, txn)
+                 refresh_ledger()
             elif ch == ord("d"):
                 ledger.delete_transaction(idx)
+                refresh_ledger()
                 idx = max(0, idx - 1)
             elif ch == ord("a"):
                 rv = add_transaction_tui(stdscr)
+                refresh_ledger()
                 idx = len(txns) - 1
             elif ch == ord("n"):
                 jump_next_uncleared()
