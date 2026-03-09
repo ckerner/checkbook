@@ -89,6 +89,7 @@ Example:
 
     checkbook.py add acct.json . "Coffee" -4.50 -c Food
 
+```
 Options:
 
     -c CATEGORY
@@ -102,6 +103,7 @@ Date shortcuts:
   -1      yesterday
   -2      two days ago
 
+```
 ------------------------------------------------------------------------
 
 ## Print Register
