@@ -190,7 +190,7 @@ def daily_report(acct):
     print("-" * 70)
     print(f"{'Date':10} {'Description':25} {'Amount':>10} {'Balance':>12}")
 
-    cutoff = (date.today() - timedelta(days=2)).isoformat()
+    cutoff = (date.today() - timedelta(days=3)).isoformat()
 
     for t, bal in zip(ledger.transactions, running):
         if t["date"] >= cutoff:
