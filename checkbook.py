@@ -632,7 +632,7 @@ def main():
 
     rec = sub.add_parser("reconcile",help="Reonciliation report")
     rec.add_argument("file")
-    rec.add_argument("--bank-balance", required=True)
+    rec.add_argument("--bank-balance", required=False)
 
     args = p.parse_args()
 
