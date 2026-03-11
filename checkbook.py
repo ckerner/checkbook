@@ -75,6 +75,16 @@ def compute_balances(account, bank_balance=None):
 # Utilities
 # =========================
 
+def resolve_date(s):
+    if s is None:
+        return None
+    s = s.strip()
+    if s == ".":
+        return date.today().isoformat()
+    if s.startswith("-") and s[1:].isdigit():
+        return (date.today() + timedelta(days=int(s))).isoformat()
+    return s
+
 def in_date_range(txn_date, start, end):
     if start and txn_date < start:
         return False
@@ -203,6 +213,74 @@ def daily_report(acct):
                 f"{bal:12.2f}"
             )
 
+def category_subset_report(acct, categories, start=None, end=None):
+
+    ledger = Ledger(acct)
+
+    start = resolve_date(start) or (date.today() - timedelta(days=30)).isoformat()
+    end = resolve_date(end) if end else None
+
+    cats = {c.lower() for c in categories}
+
+    txns = []
+    balances = ledger.running_balance()
+
+    for txn, bal in zip(ledger.transactions, balances):
+
+        if txn.get("deleted"):
+            continue
+
+        cat = (txn.get("category") or "").lower()
+
+        if cat not in cats:
+            continue
+
+        d = txn["date"]
+
+        if start and d < start:
+            continue
+        if end and d > end:
+            continue
+
+        txns.append((txn, bal))
+
+    totals = {}
+
+    for txn, _ in txns:
+        cat = txn.get("category") or "Uncategorized"
+        totals.setdefault(cat, Decimal("0.00"))
+        totals[cat] += Decimal(str(txn["amount"]))
+
+    today = date.today().isoformat()
+    print(f"\nCATEGORY SUBSET REPORT - {today}")
+    print("=" * 70)
+
+    grand_total = 0
+    footer = 'Category Totals'
+    for cat, total in sorted(totals.items()):
+        print(f"{cat:<40}{total:>15.2f}")
+        grand_total = grand_total + total
+    # cxk
+    print(f"{'':<40}{'-'*15}")
+    print(f"{footer:<40}{grand_total:>15.2f}")
+
+    print("\nTransactions")
+    print("-" * 70)
+    print(f"{'Date':10} {'Description':25} {'Category':15} {'Amount':>10}")
+    #print(f"{'Date':10} {'Description':25} {'Category':15} {'Amount':>10} {'Balance':>12}")
+
+    for txn, bal in txns:
+
+        amt = Decimal(str(txn["amount"]))
+
+        print(
+            f"{txn['date']:10} "
+            f"{txn['description'][:25]:25} "
+            f"{(txn.get('category') or '')[:15]:15} "
+            f"{amt:10.2f} "
+        )
+            #f"{bal:12.2f}"
+
 def category_detail_report(acct, start=None, end=None):
     cats = defaultdict(list)
 
@@ -267,7 +345,8 @@ def category_report(acct, start=None, end=None):
 def reconcile_report(acct, bank_balance):
     ledger = Ledger(acct)
     rec = ledger.reconcile(bank_balance)
-    print("\nRECONCILIATION REPORT")
+    today = date.today().isoformat()
+    print(f"\nRECONCILIATION REPORT - {today}")
     print("=" * 52)
     print(f"Bank balance           : {rec['bank_balance']:12.2f}")
     print(f"Uncleared checks       : {rec['uncleared_checks']:12.2f}")
@@ -543,6 +622,12 @@ def main():
     catd.add_argument("--start")
     catd.add_argument("--end")
 
+    subc = sub.add_parser("category-subset", help="List transactions for selected categories")
+    subc.add_argument("file")
+    subc.add_argument("categories", nargs="+")
+    subc.add_argument("--start")
+    subc.add_argument("--end")
+
     t = sub.add_parser("tui",help="Enter the graphical interface")
     t.add_argument("file")
     t.add_argument("--bank-balance")
@@ -576,6 +661,14 @@ def main():
         acct = load_account(args.file)
         category_detail_report(
             acct,
+            start=args.start,
+            end=args.end
+        )
+    elif args.cmd == "category-subset":
+        acct = load_account(args.file)
+        category_subset_report(
+            acct,
+            args.categories,
             start=args.start,
             end=args.end
         )
