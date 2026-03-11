@@ -617,16 +617,11 @@ def main():
     c.add_argument("--start",help="Report start date")
     c.add_argument("--end",help="Report end date")
 
-    catd = sub.add_parser("category-report", help="Category report with transactions")
+    catd = sub.add_parser("category", help="Category report with transactions")
     catd.add_argument("file")
+    catd.add_argument("--category", default=None, nargs="+")
     catd.add_argument("--start")
     catd.add_argument("--end")
-
-    subc = sub.add_parser("category-subset", help="List transactions for selected categories")
-    subc.add_argument("file")
-    subc.add_argument("categories", nargs="+")
-    subc.add_argument("--start")
-    subc.add_argument("--end")
 
     t = sub.add_parser("tui",help="Enter the graphical interface")
     t.add_argument("file")
@@ -657,21 +652,21 @@ def main():
         daily_report(acct)
     elif args.cmd == "categories":
         category_report(load_account(args.file), args.start, args.end)
-    elif args.cmd == "category-report":
+    elif args.cmd == "category":
         acct = load_account(args.file)
-        category_detail_report(
-            acct,
-            start=args.start,
-            end=args.end
-        )
-    elif args.cmd == "category-subset":
-        acct = load_account(args.file)
-        category_subset_report(
-            acct,
-            args.categories,
-            start=args.start,
-            end=args.end
-        )
+        if args.category == None:
+           category_detail_report(
+               acct,
+               start=args.start,
+               end=args.end
+           )
+        else:
+           category_subset_report(
+               acct,
+               args.category,
+               start=args.start,
+               end=args.end
+           )
     elif args.cmd == "tui":
         launch_tui(args.file, args.bank_balance)
     elif args.cmd == "reconcile":
