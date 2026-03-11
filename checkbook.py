@@ -159,7 +159,8 @@ def daily_report(acct):
 
     bank_balance = acct.get("bank_balance")
 
-    print("\nDAILY ACCOUNT REPORT")
+    today = date.today().isoformat()
+    print(f"\nDAILY ACCOUNT REPORT - {today}")
     print("=" * 70)
 
     if bank_balance:
