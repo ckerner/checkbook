@@ -197,7 +197,7 @@ def daily_report(acct):
     ):
         print(f"{t['date']} {t['description'][:30]:30} {Decimal(str(t['amount'])):10.2f}")
 
-    print("\nLAST TWO DAYS ACTIVITY")
+    print("\nLAST THREE DAYS ACTIVITY")
     print("-" * 70)
     print(f"{'Date':10} {'Description':25} {'Amount':>10} {'Balance':>12}")
 
