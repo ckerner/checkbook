@@ -75,6 +75,14 @@ def compute_balances(account, bank_balance=None):
 # Utilities
 # =========================
 
+def split_category(cat):
+    if not cat:
+        return ("Uncategorized", None)
+    parts = cat.split(":", 1)
+    main = parts[0]
+    sub = parts[1] if len(parts) > 1 else None
+    return (main, sub)
+
 def resolve_date(s):
     if s is None:
         return None
@@ -292,8 +300,13 @@ def category_detail_report(acct, start=None, end=None):
         if not in_date_range(d, start, end):
             continue
 
-        cat = t.get("category") or "Uncategorized"
-        cats[cat].append(t)
+        cat_raw = t.get("category")
+        main, sub = split_category(cat_raw)
+
+        # store subcategory on txn for display
+        t["_subcat"] = sub
+
+        cats[main].append(t)
 
     for cat in sorted(cats):
 
@@ -310,6 +323,9 @@ def category_detail_report(acct, start=None, end=None):
 
             date = t.get("date", "")
             desc = t.get("description", "")
+            sub = t.get("_subcat")
+            if sub:
+                desc = f"{desc} ({sub})"
 
             amt = Decimal(str(t["amount"]))
 
@@ -335,7 +351,8 @@ def category_report(acct, start=None, end=None):
             continue
         if end and t["date"] > end:
             continue
-        cat = t.get("category") or "Uncategorized"
+        cat_raw = t.get("category")
+        cat, _ = split_category(cat_raw)
         totals.setdefault(cat, Decimal("0.00"))
         totals[cat] += Decimal(str(t["amount"]))
     for cat, amt in sorted(totals.items()):
