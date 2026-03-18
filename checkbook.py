@@ -238,9 +238,10 @@ def category_subset_report(acct, categories, start=None, end=None):
         if txn.get("deleted"):
             continue
 
-        cat = (txn.get("category") or "").lower()
+        cat_raw = txn.get("category")
+        main, _ = split_category(cat_raw)
 
-        if cat not in cats:
+        if main.lower() not in cats:
             continue
 
         d = txn["date"]
