@@ -403,7 +403,7 @@ def launch_tui(path, initial_bank=None):
     )
 
     txns = ledger.transactions
-    idx = 0
+    idx = len(txns) - 1
     scroll = 0
     last_search = None
 
