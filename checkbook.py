@@ -90,7 +90,7 @@ def resolve_date(s):
     if s == ".":
         return date.today().isoformat()
     if s.startswith("-") and s[1:].isdigit():
-        return (date.today() + timedelta(days=int(s))).isoformat()
+        return (date.today() - timedelta(days=int(s[1:]))).isoformat()
     return s
 
 def in_date_range(txn_date, start, end):
@@ -291,6 +291,9 @@ def category_subset_report(acct, categories, start=None, end=None):
             #f"{bal:12.2f}"
 
 def category_detail_report(acct, start=None, end=None):
+    start = resolve_date(start) or (date.today() - timedelta(days=30)).isoformat()
+    end = resolve_date(end) if end else None
+
     cats = defaultdict(list)
 
     for t in acct["transactions"]:
@@ -345,20 +348,36 @@ def category_detail_report(acct, start=None, end=None):
                 f"{credit:>12}"
             )
 
-def category_report(acct, start=None, end=None):
+def category_report(acct, start=None, end=None, show_sub=False):
+    start = resolve_date(start)
+    end = resolve_date(end)
+
     totals = {}
+    sub_totals = defaultdict(lambda: defaultdict(Decimal))
+
     for t in Ledger(acct).transactions:
         if start and t["date"] < start:
             continue
         if end and t["date"] > end:
             continue
-        cat_raw = t.get("category")
-        cat, _ = split_category(cat_raw)
-        totals.setdefault(cat, Decimal("0.00"))
-        totals[cat] += Decimal(str(t["amount"]))
-    for cat, amt in sorted(totals.items()):
-        print(f"{cat:20} {amt:10.2f}")
 
+        cat_raw = t.get("category")
+        main, sub = split_category(cat_raw)
+
+        amt = Decimal(str(t["amount"]))
+
+        totals.setdefault(main, Decimal("0.00"))
+        totals[main] += amt
+
+        if sub:
+            sub_totals[main][sub] += amt
+
+    for cat in sorted(totals):
+        print(f"{cat:20} {totals[cat]:10.2f}")
+
+        if show_sub and cat in sub_totals:
+            for sub, amt in sorted(sub_totals[cat].items()):
+                print(f"  └─ {sub:16} {amt:10.2f}")
 
 def reconcile_report(acct, bank_balance):
     ledger = Ledger(acct)
@@ -455,7 +474,7 @@ def launch_tui(path, initial_bank=None):
                           attr)
 
         # Right side help
-        nav = ["Navigation", "↑/↓ move", "t top", "b bottom", "n/N uncleared", "F find", "f next", "q quit"]
+        nav = ["Navigation", "↑/↓ move", "t top", "b bottom", "n/N uncleared", "F find", "f next", "Ctrl-K Up", "Ctrl-J Donw", "q quit"]
         act = ["Actions", "space clear", "a add", "e edit", "d delete", "r bank bal"]
 
         col = w - 22
@@ -465,6 +484,51 @@ def launch_tui(path, initial_bank=None):
             stdscr.addstr(i + len(nav) + 1, col, s)
 
         stdscr.refresh()
+
+    def get_real_index(visible_idx):
+        visible = [t for t in acct["transactions"] if not t.get("deleted")]
+        target = visible[visible_idx]
+        for i, t in enumerate(acct["transactions"]):
+            if t is target:
+                return i
+        return None
+
+
+    def move_up():
+        nonlocal idx
+
+        if idx <= 0:
+            return
+
+        real_idx = get_real_index(idx)
+
+        # find previous non-deleted transaction
+        for i in range(real_idx - 1, -1, -1):
+            if not acct["transactions"][i].get("deleted"):
+                acct["transactions"][real_idx], acct["transactions"][i] = \
+                    acct["transactions"][i], acct["transactions"][real_idx]
+                idx -= 1
+                save_account(path, acct)
+                refresh_ledger()
+                return
+
+    def move_down():
+        nonlocal idx
+
+        if idx >= len(txns) - 1:
+            return
+
+        real_idx = get_real_index(idx)
+
+        # find next non-deleted transaction
+        for i in range(real_idx + 1, len(acct["transactions"])):
+            if not acct["transactions"][i].get("deleted"):
+                acct["transactions"][real_idx], acct["transactions"][i] = \
+                    acct["transactions"][i], acct["transactions"][real_idx]
+                idx += 1
+                save_account(path, acct)
+                refresh_ledger()
+                return
 
     def prompt(stdscr, msg):
         curses.curs_set(1)  # turn cursor on
@@ -603,6 +667,10 @@ def launch_tui(path, initial_bank=None):
                 find_next(last_search)
             elif ch == ord("f") and last_search:
                 find_next(last_search)
+            elif ch == 11:  # Ctrl+K
+                move_up()
+            elif ch == 10:  # Ctrl+J
+                move_down()
 
     curses.wrapper(curses_main)
 
@@ -632,6 +700,7 @@ def main():
 
     c = sub.add_parser("categories", help="Category summary report")
     c.add_argument("file")
+    c.add_argument("--sub", action="store_true", help="Show subcategory totals")
     c.add_argument("--start",help="Report start date")
     c.add_argument("--end",help="Report end date")
 
@@ -669,7 +738,7 @@ def main():
         acct = load_account(args.file)
         daily_report(acct)
     elif args.cmd == "categories":
-        category_report(load_account(args.file), args.start, args.end)
+        category_report(load_account(args.file), args.start, args.end, args.sub)
     elif args.cmd == "category":
         acct = load_account(args.file)
         if args.category == None:
