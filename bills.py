@@ -196,11 +196,21 @@ def launch_tui(bills_path, acct_path=None):
         txns = load_transactions(acct_path)
 
     def prompt(stdscr, msg):
+        curses.curs_set(1)   # 👈 SHOW cursor
         curses.echo()
+
         stdscr.addstr(curses.LINES - 1, 0, msg)
         stdscr.clrtoeol()
-        s = stdscr.getstr().decode()
-        curses.noecho()
+        stdscr.refresh()     # 👈 ensure prompt is drawn
+
+        try:
+            s = stdscr.getstr().decode()
+        except KeyboardInterrupt:
+            s = ""
+        finally:
+            curses.noecho()
+            curses.curs_set(0)  # 👈 HIDE cursor again
+
         return s
 
     def draw(stdscr):
