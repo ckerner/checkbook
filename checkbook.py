@@ -474,8 +474,8 @@ def launch_tui(path, initial_bank=None):
                           attr)
 
         # Right side help
-        nav = ["Navigation", "↑/↓ move", "t top", "b bottom", "n/N uncleared", "F find", "f next", "Ctrl-K Up", "Ctrl-J Donw", "q quit"]
-        act = ["Actions", "space clear", "a add", "e edit", "d delete", "r bank bal"]
+        nav = ["Navigation", "↑/↓ move", "t top", "b bottom", "n/N uncleared", "F find", "f next", "q quit"]
+        act = ["Actions", "space clear", "a add", "e edit", "d delete", "r bank bal", "Ctrl-K Up", "Ctrl-J Down"]
 
         col = w - 22
         for i, s in enumerate(nav):
