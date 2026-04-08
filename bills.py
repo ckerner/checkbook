@@ -11,6 +11,31 @@ from decimal import Decimal
 # ===================== DATA HANDLING =========================
 # ============================================================
 
+def monthly_totals(bills, txns):
+    now = date.today()
+    total = Decimal("0.00")
+    unpaid = Decimal("0.00")
+
+    for b in bills:
+        include = False
+
+        if b["frequency"] == "monthly":
+            include = True
+        elif b["frequency"] == "yearly" and b.get("due_month") == now.month:
+            include = True
+
+        if not include:
+            continue
+
+        amt = Decimal(b["amount"])
+        total += amt
+
+        status, _ = compute_status(b, txns)
+        if status != "PAID":
+            unpaid += amt
+
+    return total, unpaid
+
 def load_bills(path):
     try:
         with open(path) as f:
@@ -222,7 +247,16 @@ def launch_tui(bills_path, acct_path=None):
         stdscr.clear()
         h, w = stdscr.getmaxyx()
 
+        total, unpaid = monthly_totals(bills, txns)
+
+        #left = f"BILLS - {bills_path}"
+        #right = f"Monthly Total: ${total:.2f}"
+
+        #stdscr.addstr(0, 0, left)
+        #stdscr.addstr(0, max(0, w - len(right) - 1), right)
+
         stdscr.addstr(0, 0, f"BILLS - {bills_path}")
+        stdscr.addstr(1, 0, f"Monthly: ${total:.2f}   Unpaid: ${unpaid:.2f}")
 
         header = ROW_FMT.format(
             name="Name",
@@ -232,8 +266,8 @@ def launch_tui(bills_path, acct_path=None):
             status="Status",
             paid="Last Paid"
         )
-        stdscr.addstr(2, 0, header)
-        stdscr.addstr(3, 0, "-" * len(header))
+        stdscr.addstr(3, 0, header)
+        stdscr.addstr(4, 0, "-" * len(header))
 
         visible = h - 6
 
@@ -244,7 +278,7 @@ def launch_tui(bills_path, acct_path=None):
 
         for i, b in enumerate(bills[scroll:scroll + visible]):
             row = scroll + i
-            y = 4 + i
+            y = 5 + i
 
             status, paid = compute_status(b, txns)
             due = due_date_for(b)
