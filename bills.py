@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import curses
 import json
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 
-# =========================
-# Data Handling
-# =========================
+# ============================================================
+# ===================== DATA HANDLING =========================
+# ============================================================
 
 def load_bills(path):
     try:
@@ -26,6 +27,8 @@ def save_bills(path, data):
 
 
 def load_transactions(path):
+    if not path:
+        return []
     try:
         with open(path) as f:
             acct = json.load(f)
@@ -34,68 +37,47 @@ def load_transactions(path):
         return []
 
 
-# =========================
-# Date Helpers
-# =========================
+# ============================================================
+# ===================== CORE LOGIC ============================
+# ============================================================
 
 def today():
     return date.today()
 
 
-def parse_date(s):
-    return date.fromisoformat(s)
-
-
-def due_date_for(bill, ref_date=None):
-    ref_date = ref_date or today()
+def due_date_for(bill, ref=None):
+    ref = ref or today()
 
     if bill["frequency"] == "monthly":
-        return date(ref_date.year, ref_date.month, bill["due_day"])
-
+        return date(ref.year, ref.month, bill["due_day"])
     elif bill["frequency"] == "yearly":
-        return date(ref_date.year, bill["due_month"], bill["due_day"])
-
+        return date(ref.year, bill["due_month"], bill["due_day"])
     else:
-        raise ValueError("Unknown frequency")
+        raise ValueError("Invalid frequency")
 
 
-# =========================
-# Matching Logic
-# =========================
-
-def txn_matches_bill(txn, bill, due_date):
+def txn_matches_bill(txn, bill, due):
     if txn.get("category") != bill.get("category"):
         return False
 
-    txn_date = parse_date(txn["date"])
-
-    # Allow ±5 day window
-    if abs((txn_date - due_date).days) > 5:
-        return False
-
-    return True
+    txn_date = date.fromisoformat(txn["date"])
+    return abs((txn_date - due).days) <= 5
 
 
-def find_payment(bill, txns, ref_date=None):
-    ref_date = ref_date or today()
-    due = due_date_for(bill, ref_date)
+def find_payment(bill, txns):
+    due = due_date_for(bill)
 
     for t in txns:
         if txn_matches_bill(t, bill, due):
             return t
-
     return None
 
 
-# =========================
-# Status Logic
-# =========================
-
 def compute_status(bill, txns):
     now = today()
-    due = due_date_for(bill, now)
+    due = due_date_for(bill)
 
-    payment = find_payment(bill, txns, now)
+    payment = find_payment(bill, txns)
 
     if payment:
         return "PAID", payment["date"]
@@ -109,9 +91,9 @@ def compute_status(bill, txns):
     return "UPCOMING", None
 
 
-# =========================
-# CLI Actions
-# =========================
+# ============================================================
+# ===================== CLI COMMANDS ==========================
+# ============================================================
 
 def cmd_add(args):
     data = load_bills(args.file)
@@ -138,24 +120,29 @@ def cmd_add(args):
 
 
 def cmd_list(args):
-    bills = load_bills(args.file)["bills"]
-    txns = load_transactions(args.account) if args.account else []
+    data = load_bills(args.file)
+    txns = load_transactions(args.account)
 
     print(f"{'Name':20} {'Amount':>10} {'Due':>10} {'Freq':>10} {'Status':>10} {'Last Paid':>12}")
     print("-" * 80)
 
-    for b in bills:
-        status, paid_date = compute_status(b, txns)
-
+    for b in data["bills"]:
+        status, paid = compute_status(b, txns)
         due = due_date_for(b)
-        amt = Decimal(b["amount"])
 
-        print(f"{b['name'][:20]:20} {amt:10.2f} {due.isoformat():10} {b['frequency']:10} {status:10} {(paid_date or ''):12}")
+        print(
+            f"{b['name'][:20]:20} "
+            f"{Decimal(b['amount']):10.2f} "
+            f"{due.isoformat():10} "
+            f"{b['frequency']:10} "
+            f"{status:10} "
+            f"{(paid or ''):12}"
+        )
 
 
 def cmd_upcoming(args):
-    bills = load_bills(args.file)["bills"]
-    txns = load_transactions(args.account) if args.account else []
+    data = load_bills(args.file)
+    txns = load_transactions(args.account)
 
     now = today()
     horizon = now + timedelta(days=args.days)
@@ -164,12 +151,17 @@ def cmd_upcoming(args):
     print(f"{'Name':20} {'Due':>10} {'Amount':>10} {'Status':>10}")
     print("-" * 60)
 
-    for b in bills:
+    for b in data["bills"]:
         due = due_date_for(b)
 
         if now <= due <= horizon:
             status, _ = compute_status(b, txns)
-            print(f"{b['name'][:20]:20} {due.isoformat():10} {Decimal(b['amount']):10.2f} {status:10}")
+            print(
+                f"{b['name'][:20]:20} "
+                f"{due.isoformat():10} "
+                f"{Decimal(b['amount']):10.2f} "
+                f"{status:10}"
+            )
 
 
 def cmd_mark_paid(args):
@@ -185,15 +177,162 @@ def cmd_mark_paid(args):
     print("Bill not found")
 
 
-# =========================
-# CLI Setup
-# =========================
+# ============================================================
+# ===================== TUI ==================================
+# ============================================================
+
+def launch_tui(bills_path, acct_path=None):
+    data = load_bills(bills_path)
+    txns = load_transactions(acct_path)
+
+    bills = data["bills"]
+    idx = 0
+    scroll = 0
+
+    def refresh():
+        nonlocal data, bills, txns
+        data = load_bills(bills_path)
+        bills = data["bills"]
+        txns = load_transactions(acct_path)
+
+    def prompt(stdscr, msg):
+        curses.echo()
+        stdscr.addstr(curses.LINES - 1, 0, msg)
+        stdscr.clrtoeol()
+        s = stdscr.getstr().decode()
+        curses.noecho()
+        return s
+
+    def draw(stdscr):
+        nonlocal scroll
+        stdscr.clear()
+        h, w = stdscr.getmaxyx()
+
+        stdscr.addstr(0, 0, f"BILLS - {bills_path}")
+
+        header = f"{'Name':20} {'Due':10} {'Amount':>10} {'Freq':>8} {'Status':>10} {'Last Paid':>12}"
+        stdscr.addstr(2, 0, header)
+        stdscr.addstr(3, 0, "-" * len(header))
+
+        visible = h - 6
+
+        if idx < scroll:
+            scroll = idx
+        if idx >= scroll + visible:
+            scroll = idx - visible + 1
+
+        for i, b in enumerate(bills[scroll:scroll + visible]):
+            row = scroll + i
+            y = 4 + i
+
+            status, paid = compute_status(b, txns)
+            due = due_date_for(b)
+
+            attr = curses.A_REVERSE if row == idx else curses.A_NORMAL
+
+            stdscr.addstr(
+                y, 0,
+                f"{b['name'][:20]:20} "
+                f"{due.isoformat():10} "
+                f"{Decimal(b['amount']):10.2f} "
+                f"{b['frequency'][:8]:8} "
+                f"{status:10} "
+                f"{(paid or ''):12}",
+                attr
+            )
+
+        help_text = [
+            "↑/↓ move",
+            "a add",
+            "e edit",
+            "d delete",
+            "r refresh",
+            "q quit"
+        ]
+
+        col = w - 20
+        for i, line in enumerate(help_text):
+            stdscr.addstr(i, col, line)
+
+        stdscr.refresh()
+
+    def add_bill(stdscr):
+        name = prompt(stdscr, "Name: ")
+        amount = Decimal(prompt(stdscr, "Amount: "))
+        freq = prompt(stdscr, "Frequency (monthly/yearly): ").strip()
+
+        day = int(prompt(stdscr, "Due day: "))
+        category = prompt(stdscr, "Category: ")
+
+        bill = {
+            "name": name,
+            "amount": str(amount),
+            "frequency": freq,
+            "due_day": day,
+            "category": category,
+            "last_paid": None
+        }
+
+        if freq == "yearly":
+            bill["due_month"] = int(prompt(stdscr, "Due month (1-12): "))
+
+        data["bills"].append(bill)
+        save_bills(bills_path, data)
+
+    def edit_bill(stdscr, b):
+        for field in ["name", "amount", "category"]:
+            val = str(b.get(field, ""))
+            s = prompt(stdscr, f"{field} [{val}]: ")
+            if s:
+                b[field] = s
+
+        save_bills(bills_path, data)
+
+    def delete_bill():
+        bills.pop(idx)
+        save_bills(bills_path, data)
+
+    def curses_main(stdscr):
+        nonlocal idx
+
+        curses.curs_set(0)
+
+        while True:
+            draw(stdscr)
+            ch = stdscr.getch()
+
+            if ch == ord("q"):
+                break
+            elif ch in (curses.KEY_DOWN, ord("j")) and idx < len(bills) - 1:
+                idx += 1
+            elif ch in (curses.KEY_UP, ord("k")) and idx > 0:
+                idx -= 1
+            elif ch == ord("a"):
+                add_bill(stdscr)
+                refresh()
+                idx = len(bills) - 1
+            elif ch == ord("e") and bills:
+                edit_bill(stdscr, bills[idx])
+                refresh()
+            elif ch == ord("d") and bills:
+                delete_bill()
+                refresh()
+                idx = max(0, idx - 1)
+            elif ch == ord("r"):
+                refresh()
+
+    curses.wrapper(curses_main)
+
+
+# ============================================================
+# ===================== MAIN =================================
+# ============================================================
 
 def main():
     p = argparse.ArgumentParser(description="Bill tracking utility")
     sub = p.add_subparsers(dest="cmd")
 
-    # add
+    # CLI
     a = sub.add_parser("add")
     a.add_argument("file")
     a.add_argument("name")
@@ -203,22 +342,24 @@ def main():
     a.add_argument("-f", "--frequency", choices=["monthly", "yearly"], default="monthly")
     a.add_argument("--month", type=int)
 
-    # list
     l = sub.add_parser("list")
     l.add_argument("file")
-    l.add_argument("--account", help="checkbook json file")
+    l.add_argument("--account")
 
-    # upcoming
     u = sub.add_parser("upcoming")
     u.add_argument("file")
     u.add_argument("--account")
     u.add_argument("--days", type=int, default=7)
 
-    # mark paid
     m = sub.add_parser("mark-paid")
     m.add_argument("file")
     m.add_argument("name")
     m.add_argument("--date")
+
+    # TUI
+    t = sub.add_parser("tui")
+    t.add_argument("file")
+    t.add_argument("--account")
 
     args = p.parse_args()
 
@@ -230,6 +371,8 @@ def main():
         cmd_upcoming(args)
     elif args.cmd == "mark-paid":
         cmd_mark_paid(args)
+    elif args.cmd == "tui":
+        launch_tui(args.file, args.account)
     else:
         p.print_help()
 
