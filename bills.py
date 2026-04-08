@@ -181,7 +181,10 @@ def cmd_mark_paid(args):
 # ===================== TUI ==================================
 # ============================================================
 
+
 def launch_tui(bills_path, acct_path=None):
+    ROW_FMT = "{name:20} {due:10} {amount:>10} {freq:8} {status:10} {paid:12}"
+
     data = load_bills(bills_path)
     txns = load_transactions(acct_path)
 
@@ -196,20 +199,21 @@ def launch_tui(bills_path, acct_path=None):
         txns = load_transactions(acct_path)
 
     def prompt(stdscr, msg):
-        curses.curs_set(1)   # 👈 SHOW cursor
+        curses.curs_set(1)
         curses.echo()
 
         stdscr.addstr(curses.LINES - 1, 0, msg)
         stdscr.clrtoeol()
-        stdscr.refresh()     # 👈 ensure prompt is drawn
+        stdscr.move(curses.LINES - 1, len(msg))
+        stdscr.refresh()
 
         try:
             s = stdscr.getstr().decode()
         except KeyboardInterrupt:
-            s = ""
+            raise  # 👈 let caller handle cancel
         finally:
             curses.noecho()
-            curses.curs_set(0)  # 👈 HIDE cursor again
+            curses.curs_set(0)
 
         return s
 
@@ -220,7 +224,14 @@ def launch_tui(bills_path, acct_path=None):
 
         stdscr.addstr(0, 0, f"BILLS - {bills_path}")
 
-        header = f"{'Name':20} {'Due':10} {'Amount':>10} {'Freq':>8} {'Status':>10} {'Last Paid':>12}"
+        header = ROW_FMT.format(
+            name="Name",
+            due="Due",
+            amount="Amount",
+            freq="Freq",
+            status="Status",
+            paid="Last Paid"
+        )
         stdscr.addstr(2, 0, header)
         stdscr.addstr(3, 0, "-" * len(header))
 
@@ -240,16 +251,17 @@ def launch_tui(bills_path, acct_path=None):
 
             attr = curses.A_REVERSE if row == idx else curses.A_NORMAL
 
-            stdscr.addstr(
-                y, 0,
-                f"{b['name'][:20]:20} "
-                f"{due.isoformat():10} "
-                f"{Decimal(b['amount']):10.2f} "
-                f"{b['frequency'][:8]:8} "
-                f"{status:10} "
-                f"{(paid or ''):12}",
-                attr
+            line = ROW_FMT.format(
+                 name=b["name"][:20],
+                 due=due.isoformat(),
+                 amount=f"{Decimal(b['amount']):.2f}",
+                 freq=b["frequency"][:8],
+                 status=status,
+                 paid=(paid or "")
             )
+
+            stdscr.addstr(y, 0, line, attr)
+
 
         help_text = [
             "↑/↓ move",
@@ -267,36 +279,46 @@ def launch_tui(bills_path, acct_path=None):
         stdscr.refresh()
 
     def add_bill(stdscr):
-        name = prompt(stdscr, "Name: ")
-        amount = Decimal(prompt(stdscr, "Amount: "))
-        freq = prompt(stdscr, "Frequency (monthly/yearly): ").strip()
+        try:
+            name = prompt(stdscr, "Name: ")
+            amount = Decimal(prompt(stdscr, "Amount: "))
+            freq = prompt(stdscr, "Frequency (monthly/yearly): ").strip()
 
-        day = int(prompt(stdscr, "Due day: "))
-        category = prompt(stdscr, "Category: ")
+            day = int(prompt(stdscr, "Due day: "))
+            category = prompt(stdscr, "Category: ")
 
-        bill = {
-            "name": name,
-            "amount": str(amount),
-            "frequency": freq,
-            "due_day": day,
-            "category": category,
-            "last_paid": None
-        }
+            bill = {
+                "name": name,
+                "amount": str(amount),
+                "frequency": freq,
+                "due_day": day,
+                "category": category,
+                "last_paid": None
+            }
 
-        if freq == "yearly":
-            bill["due_month"] = int(prompt(stdscr, "Due month (1-12): "))
+            if freq == "yearly":
+                bill["due_month"] = int(prompt(stdscr, "Due month (1-12): "))
 
-        data["bills"].append(bill)
-        save_bills(bills_path, data)
+            data["bills"].append(bill)
+            save_bills(bills_path, data)
+
+        except KeyboardInterrupt:
+            # 👈 cancel cleanly, do nothing
+            return
+
 
     def edit_bill(stdscr, b):
-        for field in ["name", "amount", "category"]:
-            val = str(b.get(field, ""))
-            s = prompt(stdscr, f"{field} [{val}]: ")
-            if s:
-                b[field] = s
+        try:
+            for field in ["name", "amount", "category"]:
+                val = str(b.get(field, ""))
+                s = prompt(stdscr, f"{field} [{val}]: ")
+                if s:
+                    b[field] = s
 
-        save_bills(bills_path, data)
+            save_bills(bills_path, data)
+
+        except KeyboardInterrupt:
+            return
 
     def delete_bill():
         bills.pop(idx)
