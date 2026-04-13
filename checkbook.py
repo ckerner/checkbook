@@ -635,6 +635,9 @@ def launch_tui(path, initial_bank=None):
                 idx = 0
             elif ch == ord("b"):
                 idx = len(txns) - 1
+            elif ch == ord("c"):
+                txns[idx]["cleared"] = not txns[idx].get("cleared")
+                refresh_ledger()
             elif ch == ord(" "):
                 txns[idx]["cleared"] = not txns[idx].get("cleared")
                 refresh_ledger()
@@ -707,7 +710,7 @@ def main():
     catd = sub.add_parser("category", help="Category report with transactions")
     catd.add_argument("file")
     catd.add_argument("--category", default=None, nargs="+")
-    catd.add_argument("--start")
+    catd.add_argument("--start",default="-30")
     catd.add_argument("--end")
 
     t = sub.add_parser("tui",help="Enter the graphical interface")
