@@ -90,6 +90,8 @@ def resolve_date(s):
         return date.today().isoformat()
     if s.startswith("-") and s[1:].isdigit():
         return (date.today() - timedelta(days=int(s[1:]))).isoformat()
+    if s.startswith("+") and s[1:].isdigit():
+        return (date.today() + timedelta(days=int(s[1:]))).isoformat()
     return s
 
 def in_date_range(txn_date, start, end):
@@ -117,6 +119,8 @@ def today_if_dot(s: str) -> str:
     # "-N" → N days ago
     if s.startswith("-") and s[1:].isdigit():
         return (date.today() - timedelta(days=int(s[1:]))).isoformat()
+    if s.startswith("+") and s[1:].isdigit():
+        return (date.today() + timedelta(days=int(s[1:]))).isoformat()
 
     # otherwise unchanged
     return s
@@ -541,7 +545,7 @@ def launch_tui(path, initial_bank=None):
 
     def add_transaction_tui(stdscr):
         try:
-           date_in = prompt(stdscr, "Date (YYYY-MM-DD|.=today|-N): ")
+           date_in = prompt(stdscr, "Date (YYYY-MM-DD|.=today|-N|+N): ")
            date_val = today_if_dot(date_in)
            desc = prompt(stdscr, "Description: ")
            cat = prompt(stdscr, "Category (blank = uncategorized): ")
