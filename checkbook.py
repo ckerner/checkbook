@@ -8,7 +8,6 @@ from datetime import date, timedelta
 import sys
 from collections import defaultdict
 
-
 # =========================
 # Ledger and helper
 # =========================
@@ -371,9 +370,9 @@ def category_report(acct, start=None, end=None, show_sub=False):
 
         if sub:
             sub_totals[main][sub] += amt
-
+    #CHAD
     for cat in sorted(totals):
-        print(f"{cat:20} {totals[cat]:10.2f}")
+        print(f"{cat:20} {'':15} {totals[cat]:10.2f}")
 
         if show_sub and cat in sub_totals:
             for sub, amt in sorted(sub_totals[cat].items()):
